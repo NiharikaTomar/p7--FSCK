@@ -1,4 +1,4 @@
-//
+ //
 // File-system system calls.
 // Mostly argument checking, since we don't trust
 // user code, and calls into file.c and fs.c.
@@ -176,26 +176,21 @@ sys_symlink(void)
   if(argstr(0, &target) < 0 || argstr(1, &link_name) < 0)
     return -1;
 
-  if((ip = namei(target)) == 0){
-    return -1;
-  }
-  
-  if(ip->type == T_DIR){
+  begin_op();
+  if (ip = create(link_name, T_SYM, 0, 0) == 0) {
+    end_op();
     return -1;
   }
 
-  ip->type = T_SYM;
-
-  if (ip = create(link_name, T_DIR, 0, 0)) == 0){
+  if (writei(ip, target, 0, ip->sizeof) == 0) {
+    end_op();
     return -1;
   }
 
   iupdate(ip); // write change to the disk
-  
-  // Open symlinks
+  iunlock(ip);
 
-  // Remove symlinks
-  // bfree();
+  end_op();
 
   return 0;
 }
@@ -300,11 +295,18 @@ create(char *path, short type, short major, short minor)
   ip->major = major;
   ip->minor = minor;
   ip->nlink = 1;
+  // Q: ip->type = type; ??
   iupdate(ip);
 
   if(type == T_DIR){  // Create . and .. entries.
     dp->nlink++;  // for ".."
     iupdate(dp);
+    // No ip->nlink++ for ".": avoid cyclic ref count.
+    if(dirlink(ip, ".", ip->inum) < 0 || dirlink(ip, "..", dp->inum) < 0)
+      panic("create dots");
+  }
+
+  if(type == T_SYM){  // Create . and .. entries.
     // No ip->nlink++ for ".": avoid cyclic ref count.
     if(dirlink(ip, ".", ip->inum) < 0 || dirlink(ip, "..", dp->inum) < 0)
       panic("create dots");
@@ -322,6 +324,7 @@ int
 sys_open(void)
 {
   char *path;
+  char *second_path;
   int fd, omode;
   struct file *f;
   struct inode *ip;
@@ -348,6 +351,23 @@ sys_open(void)
       end_op();
       return -1;
     }
+    if(ip->type == T_SYM) {
+      strcpy(second_path, path);
+      if (readi(ip, second_path, 0, ip->size) == 0) {
+        iunlockput(ip);
+        end_op();
+        return -1;
+      }
+      if((ip = namei(second_path)) == 0){
+        iunlockput(ip);
+        end_op();
+        return -1;
+      }
+    }
+  }
+
+  if () {
+    
   }
 
   if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
