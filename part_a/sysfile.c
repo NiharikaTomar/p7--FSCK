@@ -138,7 +138,7 @@ sys_link(void)
   }
 
   ip->nlink++;
-  iupdate(ip); // write change to the disk
+  iupdate(ip);
   iunlock(ip);
 
   if((dp = nameiparent(new, name)) == 0)
@@ -169,19 +169,33 @@ bad:
 int
 sys_symlink(void)
 {
-  char link_name[512];
-  char target[512];
-  char *new;
-  char *old;
+  char *link_name;
+  char *target;
+  struct inode *ip;
 
-  if(argstr(0, &old) < 0 || argstr(1, &new) < 0)
+  if(argstr(0, &target) < 0 || argstr(1, &link_name) < 0)
     return -1;
 
-  begin_op();
-  if((ip = namei(old)) == 0){
-    end_op();
+  if((ip = namei(target)) == 0){
     return -1;
   }
+  
+  if(ip->type == T_DIR){
+    return -1;
+  }
+
+  ip->type = T_SYM;
+
+  if (ip = create(link_name, T_DIR, 0, 0)) == 0){
+    return -1;
+  }
+
+  iupdate(ip); // write change to the disk
+  
+  // Open symlinks
+
+  // Remove symlinks
+  // bfree();
 
   return 0;
 }
