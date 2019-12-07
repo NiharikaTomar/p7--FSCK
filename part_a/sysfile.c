@@ -164,42 +164,7 @@ bad:
   return -1;
 }
 
-// Create a reference to another file in the form of an absolute
-// or relative path that affects the pathname resolution.
-int
-sys_symlink(void)
-{
-  char *link_name;
-  char *target;
-  struct inode *ip;
 
-  if(argstr(0, &target) < 0 || argstr(1, &link_name) < 0)
-    return -1;
-
-  begin_op();
-
-  if ((ip = namei(link_name)) == 0) {
-    end_op();
-    return -1;
-  }
-
-  if (ip = create(link_name, T_SYM, 0, 0) == 0) {
-    end_op();
-    return -1;
-  }
-
-  if (writei(ip, target, 0, ip->sizeof) == 0) {
-    end_op();
-    return -1;
-  }
-
-  iupdate(ip); // write change to the disk
-  iunlock(ip);
-
-  end_op();
-
-  return 0;
-}
 
 // Is the directory dp empty except for "." and ".." ?
 static int
@@ -301,7 +266,7 @@ create(char *path, short type, short major, short minor)
   ip->major = major;
   ip->minor = minor;
   ip->nlink = 1;
-  // Q: ip->type = type; ??
+
   iupdate(ip);
 
   if(type == T_DIR){  // Create . and .. entries.
@@ -312,11 +277,11 @@ create(char *path, short type, short major, short minor)
       panic("create dots");
   }
 
-  if(type == T_SYM){  // Create . and .. entries.
-    // No ip->nlink++ for ".": avoid cyclic ref count.
-    if(dirlink(ip, ".", ip->inum) < 0 || dirlink(ip, "..", dp->inum) < 0)
-      panic("create dots");
-  }
+  // if(type == T_SYM){  // Create . and .. entries.
+  //   // No ip->nlink++ for ".": avoid cyclic ref count.
+  //   if(dirlink(ip, ".", ip->inum) < 0 || dirlink(ip, "..", dp->inum) < 0)
+  //     panic("create dots");
+  // }
 
   if(dirlink(dp, name, ip->inum) < 0)
     panic("create: dirlink");
@@ -330,7 +295,7 @@ int
 sys_open(void)
 {
   char *path;
-  char *second_path;
+  char second_path[512];
   int fd, omode;
   struct file *f;
   struct inode *ip;
@@ -358,22 +323,39 @@ sys_open(void)
       return -1;
     }
     if(ip->type == T_SYM) {
-      strcpy(second_path, path);
+      strncpy(second_path, path, 512);
       if (readi(ip, second_path, 0, ip->size) == 0) {
         iunlockput(ip);
         end_op();
         return -1;
       }
+      // TODO
+      // !!!!!!!!!!!!!!!!! PROBLEM HERE !!!!!!!!!!!!!!!
+      iunlock(ip);
+      cprintf("HELLO");
+      ilock(ip);
+      // !!!!!!!!!!!!!!!!! PROBLEM HERE !!!!!!!!!!!!!!!
+
       if((ip = namei(second_path)) == 0){
         iunlockput(ip);
         end_op();
         return -1;
       }
+
+      // Check if target does not exist
+      if(ip == 0){
+        cprintf("Target does not exist");
+        iunlockput(ip);
+        end_op();
+        return -1;
+      }
+
+      // Check if target is a directory
       if(ip->type == T_DIR){
-        panic("Target is a directory");
-        // iunlockput(ip);
-        // end_op();
-        // return -1;
+        cprintf("Target is a directory");
+        iunlockput(ip);
+        end_op();
+        return -1;
       }
     }
   }
@@ -504,5 +486,43 @@ sys_pipe(void)
   }
   fd[0] = fd0;
   fd[1] = fd1;
+  return 0;
+}
+
+// Create a reference to another file in the form of an absolute
+// or relative path that affects the pathname resolution.
+int
+sys_symlink(void)
+{
+  char *link_name;
+  char *target;
+  struct inode *ip;
+
+  if(argstr(0, &target) < 0 || argstr(1, &link_name) < 0)
+    return -1;
+
+  begin_op();
+
+  // Check if this link_name already exists in this directory
+  if ((ip = namei(link_name)) != 0) {
+    end_op();
+    return -1;
+  }
+
+  if ((ip = create(link_name, T_SYM, 0, 0)) == 0) {
+    end_op();
+    return -1;
+  }
+
+  if (writei(ip, target, 0, strlen(target)+1) == 0) {
+    end_op();
+    return -1;
+  }
+
+  iupdate(ip); // write change to the disk
+  iunlock(ip);
+
+  end_op();
+
   return 0;
 }
