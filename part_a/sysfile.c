@@ -177,6 +177,12 @@ sys_symlink(void)
     return -1;
 
   begin_op();
+
+  if ((ip = namei(link_name)) == 0) {
+    end_op();
+    return -1;
+  }
+
   if (ip = create(link_name, T_SYM, 0, 0) == 0) {
     end_op();
     return -1;
@@ -363,11 +369,13 @@ sys_open(void)
         end_op();
         return -1;
       }
+      if(ip->type == T_DIR){
+        panic("Target is a directory");
+        // iunlockput(ip);
+        // end_op();
+        // return -1;
+      }
     }
-  }
-
-  if () {
-    
   }
 
   if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
