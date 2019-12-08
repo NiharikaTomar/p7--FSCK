@@ -164,8 +164,6 @@ bad:
   return -1;
 }
 
-
-
 // Is the directory dp empty except for "." and ".." ?
 static int
 isdirempty(struct inode *dp)
@@ -266,7 +264,6 @@ create(char *path, short type, short major, short minor)
   ip->major = major;
   ip->minor = minor;
   ip->nlink = 1;
-
   iupdate(ip);
 
   if(type == T_DIR){  // Create . and .. entries.
@@ -276,12 +273,6 @@ create(char *path, short type, short major, short minor)
     if(dirlink(ip, ".", ip->inum) < 0 || dirlink(ip, "..", dp->inum) < 0)
       panic("create dots");
   }
-
-  // if(type == T_SYM){  // Create . and .. entries.
-  //   // No ip->nlink++ for ".": avoid cyclic ref count.
-  //   if(dirlink(ip, ".", ip->inum) < 0 || dirlink(ip, "..", dp->inum) < 0)
-  //     panic("create dots");
-  // }
 
   if(dirlink(dp, name, ip->inum) < 0)
     panic("create: dirlink");
@@ -325,7 +316,7 @@ sys_open(void)
     if(ip->type == T_SYM) {
       strncpy(second_path, path, 512);
       if (readi(ip, second_path, 0, ip->size) != ip->size) {
-        iunlockput(ip);
+        // iunlockput(ip);
         end_op();
         return -1;
       }
@@ -339,14 +330,14 @@ sys_open(void)
 
       // Check if target does not exist
       if(ip == 0){
-        cprintf("Target does not exist");
+        //cprintf("Target does not exist");
         end_op();
         return -1;
       }
 
       // Check if target is a directory
       if(ip->type == T_DIR){
-        cprintf("Target is a directory");
+       // cprintf("Target is a directory");
         end_op();
         return -1;
       }
@@ -508,7 +499,7 @@ sys_symlink(void)
     return -1;
   }
 
-  if (writei(ip, target, 0, strlen(target) + 1) == 0) {
+  if (writei(ip, target, 0, strlen(target) + 1) != (strlen(target) + 1)) {
     end_op();
     return -1;
   }
