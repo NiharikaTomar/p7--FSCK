@@ -324,20 +324,15 @@ sys_open(void)
     }
     if(ip->type == T_SYM) {
       strncpy(second_path, path, 512);
-      if (readi(ip, second_path, 0, ip->size) == 0) {
+      if (readi(ip, second_path, 0, ip->size) != ip->size) {
         iunlockput(ip);
         end_op();
         return -1;
       }
-      // TODO
-      // !!!!!!!!!!!!!!!!! PROBLEM HERE !!!!!!!!!!!!!!!
+      
       iunlock(ip);
-      cprintf("HELLO");
-      ilock(ip);
-      // !!!!!!!!!!!!!!!!! PROBLEM HERE !!!!!!!!!!!!!!!
 
       if((ip = namei(second_path)) == 0){
-        iunlockput(ip);
         end_op();
         return -1;
       }
@@ -345,7 +340,6 @@ sys_open(void)
       // Check if target does not exist
       if(ip == 0){
         cprintf("Target does not exist");
-        iunlockput(ip);
         end_op();
         return -1;
       }
@@ -353,10 +347,10 @@ sys_open(void)
       // Check if target is a directory
       if(ip->type == T_DIR){
         cprintf("Target is a directory");
-        iunlockput(ip);
         end_op();
         return -1;
       }
+      ilock(ip);
     }
   }
 
@@ -514,7 +508,7 @@ sys_symlink(void)
     return -1;
   }
 
-  if (writei(ip, target, 0, strlen(target)+1) == 0) {
+  if (writei(ip, target, 0, strlen(target) + 1) == 0) {
     end_op();
     return -1;
   }
