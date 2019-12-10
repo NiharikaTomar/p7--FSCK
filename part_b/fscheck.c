@@ -18,55 +18,68 @@
 // 0.unused --> 1.superblock -->2.inodetable --> 3.bitmap --> 4.data blocks
 
 int main(int argc, char *argv[]){
-	// DECLARATION
-	void *img;
-	struct superblock *sblock;
-	struct dinode *di;
-	struct dirent *dirent;
-	struct stat *stat;
-	int bitmap[sblock->size]; // bitmap array
-	int numBlocks; // number of data numBlocks
-
-
-	// INITIALIZATION
-	sblock = (img + BSIZE);
-
+	// STD CHECKS
 	if(argc < 2 || argc > 2){
 		printf("illegal number of arguments");
 		fflush();
 	}
-	int fd;
-	fd = open(argv[1], O_RDONLY);
-  if (fd < 0) {
+	// opening file
+	int fd = open(argv[1], O_RDONLY);
+  if (fd == -1) {
     printf(stderr, "ERROR: image not found\n");
 		fflush();
     exit(1);
   }
 
+	// DECLARATION
+	void *img;
+	// to point to the superblock struct (in fs.c)
+	struct superblock *sblock;
+	// to point to the dinode struct (in fs.c)
+	struct dinode *di;
+	struct dirent *dir;
+	struct stat img_stat;
+	int *bitmap[sblock->size]; // bitmap array
+	int numBlocks; // number of data numBlocks
+
+
+	// INITIALIZATION
+	int temp = fstat(fd, &img_stat); // getting file size
+
+	// If expression evaluates to TRUE, assert() does nothing.
+	// If expression evaluates to FALSE, assert() displays an error
+	// message on stderr
+	// site: https://www.tutorialspoint.com/c_standard_library/c_macro_assert.htm
+	assert(temp == 0);
+	// mmap usage points to the start of the file system/block 0
+	img = mmap(NULL, img_stat.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+	assert(img != MAP_FAILED);
+
+
+
 	numBlocks = (sblock->ninodes * sizeof(struct dinode))/ BSIZE + 1;
-	// img = mmap(NULL, stat->size, , , fd, 0);
-	sblock = (img + BSIZE);
-	di = (BSIZE * 2 + img)) // inode table starts at index 2
+	// since, superblock starts at index 1 (as block 0 + BSIZE: 512 bytes)
+	sblock = (struct superblock*) (img + 1 * BSIZE);
+	// since, inode table starts at index 2
+	di = (struct dinode*) (BSIZE * 2 + img)) // points to first inode block
 
 	// Since bitmap starts at index 3,
-	bitmap = (BSIZE * (sblock->ninodes/IPB + 3) + img);
+	bitmap = (int *)(BSIZE * (sblock->ninodes/IPB + 3) + (int*)img);
 	// Since datablock starts at index 4,
 	// numBlocks = (BSIZE * (sblock->ninodes/IPB + .... + 4) + img);
 
 	// CHECKS
 	// DIRECTORY CHECKS
 	// check 1 : root dir
-  if ((ROOTINO + di)->type != T_DIR) {  //a) if type not directory
-    printf(stderr, "ERROR: root directory does not exist.\n");
-		fflush();
-    exit(1);
-  }
-	// if (!(ROOTINO + di)){ // b) if it doesn't even exist
-	// 	printf(stderr, "ERROR: root directory does not exist.\n");
-	// 	fflush();
-  //  exit(1);
-	// }
-
+	for (int i = 0; i < sblock->ninodes; i++) {
+	  if ((di->type != T_DIR && i == 1)
+				|| (dir + 1)->inum != 1) { // // checking if the inum of the parent
+	    printf(stderr, "ERROR: root directory does not exist.\n");
+			fflush();
+	    exit(1);
+	  }
+		di++;
+}
 	// check 2 : current dir mismatch ???
 
 	// INODE CHECKS
@@ -81,6 +94,7 @@ int main(int argc, char *argv[]){
 			fflush();
 	    exit(1);
 		}
+		//di++;
 }
 	// check 2 : bad size ???
 
