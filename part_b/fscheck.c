@@ -37,33 +37,33 @@ int main(int argc, char *argv[]) {
 
 	void *img = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
 
-	struct superblock *sblock = img + BSIZE;
-	// inode table starts at index 2
+	// Superblock starts at index 1 (as block 0 + BSIZE: 512 bytes)
+	struct superblock *sblock = img + 1 * BSIZE;
+	// points to first inode block
 	struct dinode *di = BSIZE * 2 + img;
 	// struct dinode *di = img + 1 * BSIZE;
-	struct dirent *dirent;
+	// struct dirent *dirent;
 
-	int bitmap[sblock->size];
+	// int *bitmap[sblock->size];
 
 	// Number of data blocks
 	int num_blocks = (sblock->ninodes * sizeof(struct dinode))/ BSIZE + 1;
 
 	// Since bitmap starts at index 3,
-	bitmap = (BSIZE * (sblock->ninodes/IPB + 3) + img);
-	// Since datablock starts at index 4,
-	// num_blocks = (BSIZE * (sblock->ninodes/IPB + .... + 4) + img);
+	int *bitmap = BSIZE * (sblock->ninodes/IPB + 3) + img;
 
 	// DIRECTORY CHECKS
 	// check 1 : root dir
-	for (int i = 0; i < sblock->ninodes; i++) {
-	  if ((di->type != 1 && i == 1) ||
-			(dirent + 1)->inum != 1) {  //a) if type not directory
+	// for (int i = 0; i < sblock->ninodes; i++) {
+	  if (di->type != 1) {
+		// if ((di->type != 1 && i == 1) ||
+			// (dirent + 1)->inum != 1) {  //a) if type not directory
 	    fprintf(stderr, "ERROR: root directory does not exist.\n");
 			fflush(stderr);
 	    exit(1);
 	  }
-		di++;
-	}
+		// di++;
+	// }
 	// if (!(ROOTINO + di)){ // b) if it doesn't even exist
 	// 	printf(stderr, "ERROR: root directory does not exist.\n");
 	// 	fflush();
