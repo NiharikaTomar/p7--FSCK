@@ -1,127 +1,117 @@
 #include <stdio.h>
-#include <unistd.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <string.h>
 #include <fcntl.h>
 #include <assert.h>
-
-#define stat xv6_stat  // avoid clash with host struct stat
-#include "types.h"
+#include <sys/mman.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include "fs.h"
-#include "stat.h"
-#include "param.h"
+// #include "stat.h"
 
-//SANITY CHECK - MAP
+// SANITY CHECK - MAP
 // block 0 = unused
 // block 1: superblock
 // structure :
 // 0.unused --> 1.superblock -->2.inodetable --> 3.bitmap --> 4.data blocks
 
-int main(int argc, char *argv[]){
-	// STD CHECKS
-	if(argc < 2 || argc > 2){
-		printf("illegal number of arguments");
-		fflush();
+int main(int argc, char *argv[]) {
+	// Check if number of arguments is correct.
+	if(argc != 2){
+		fprintf(stderr, "Illegal number of arguments.");
+		fflush(stderr);
 	}
-	// opening file
+
+	// File descriptor
 	int fd = open(argv[1], O_RDONLY);
-  if (fd == -1) {
-    printf(stderr, "ERROR: image not found\n");
-		fflush();
+  if (fd < 0) {
+    fprintf(stderr, "ERROR: image not found.\n");
+		fflush(stderr);
     exit(1);
   }
 
-	// DECLARATION
-	void *img;
-	// to point to the superblock struct (in fs.c)
-	struct superblock *sblock;
-	// to point to the dinode struct (in fs.c)
-	struct dinode *di;
-	struct dirent *dir;
-	struct stat img_stat;
-	int *bitmap[sblock->size]; // bitmap array
-	int numBlocks; // number of data numBlocks
+	// Get the size of the file
+	struct stat st;
+	fstat(fd, &st);
 
+	void *img = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
 
-	// INITIALIZATION
-	int temp = fstat(fd, &img_stat); // getting file size
+	struct superblock *sblock = img + BSIZE;
+	// inode table starts at index 2
+	struct dinode *di = BSIZE * 2 + img;
+	// struct dinode *di = img + 1 * BSIZE;
+	struct dirent *dirent;
 
-	// If expression evaluates to TRUE, assert() does nothing.
-	// If expression evaluates to FALSE, assert() displays an error
-	// message on stderr
-	// site: https://www.tutorialspoint.com/c_standard_library/c_macro_assert.htm
-	assert(temp == 0);
-	// mmap usage points to the start of the file system/block 0
-	img = mmap(NULL, img_stat.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
-	assert(img != MAP_FAILED);
+	int bitmap[sblock->size];
 
-
-
-	numBlocks = (sblock->ninodes * sizeof(struct dinode))/ BSIZE + 1;
-	// since, superblock starts at index 1 (as block 0 + BSIZE: 512 bytes)
-	sblock = (struct superblock*) (img + 1 * BSIZE);
-	// since, inode table starts at index 2
-	di = (struct dinode*) (BSIZE * 2 + img)) // points to first inode block
+	// Number of data blocks
+	int num_blocks = (sblock->ninodes * sizeof(struct dinode))/ BSIZE + 1;
 
 	// Since bitmap starts at index 3,
-	bitmap = (int *)(BSIZE * (sblock->ninodes/IPB + 3) + (int*)img);
+	bitmap = (BSIZE * (sblock->ninodes/IPB + 3) + img);
 	// Since datablock starts at index 4,
-	// numBlocks = (BSIZE * (sblock->ninodes/IPB + .... + 4) + img);
+	// num_blocks = (BSIZE * (sblock->ninodes/IPB + .... + 4) + img);
 
-	// CHECKS
 	// DIRECTORY CHECKS
 	// check 1 : root dir
 	for (int i = 0; i < sblock->ninodes; i++) {
-	  if ((di->type != T_DIR && i == 1)
-				|| (dir + 1)->inum != 1) { // // checking if the inum of the parent
-	    printf(stderr, "ERROR: root directory does not exist.\n");
-			fflush();
+	  if ((di->type != 1 && i == 1) ||
+			(dirent + 1)->inum != 1) {  //a) if type not directory
+	    fprintf(stderr, "ERROR: root directory does not exist.\n");
+			fflush(stderr);
 	    exit(1);
 	  }
 		di++;
-}
-	// check 2 : current dir mismatch ???
+	}
+	// if (!(ROOTINO + di)){ // b) if it doesn't even exist
+	// 	printf(stderr, "ERROR: root directory does not exist.\n");
+	// 	fflush();
+  //  exit(1);
+	// }
+
+	// check 2 : current dir mismatch
+	// TODO
 
 	// INODE CHECKS
 	// check 1 : bad inode
 	for (int i = 0; i < sblock->ninodes; i++){
-		if (di->type != T_DIR
-			//&& di->type != T_SYM
-	    && di->type != T_FILE
-			&& di->type != T_DEV
+		if (di->type != 1 // T_DIR
+	    && di->type != 2 // T_FILE
+			&& di->type != 3 // T_DEV
 			&& di->type != 0) {
-	    printf(stderr, "ERROR: bad inode.\n");
-			fflush();
-	    exit(1);
+		    fprintf(stderr, "ERROR: bad inode.\n");
+				fflush(stderr);
+		    exit(1);
 		}
-		//di++;
 }
-	// check 2 : bad size ???
+	// check 2 : bad size
+	// TODO
 
 	// BITMAP CHECKS
 	// check 1 : bitmap marks data free
 	for (int i = 0; i < NDIRECT+1; i++){
-		if (bitmap[di->addrs[i]] <= 0)
-		printf(stderr,"ERROR: bitmap marks data free but data block used by inode.\n");
-		fflush();
-		exit(1);
+		if (bitmap[di->addrs[i]] <= 0) {
+			fprintf(stderr,"ERROR: bitmap marks data free but data block used by inode.\n");
+			fflush(stderr);
+			exit(1);
+		}
 	}
 
 	// check 2 : bitmap marks data in use
 	for (int i = 0; i < sblock->size; i++){
-		if (i > numBlocks && bitmap[i] > 0) { // ????
-			printf(stderr,"ERROR: bitmap marks data block in use but not used.\n");
-			fflush();
+		if (i > num_blocks && bitmap[i] > 0) { // ????
+			fprintf(stderr,"ERROR: bitmap marks data block in use but not used.\n");
+			fflush(stderr);
 			exit(1);
 		}
 	}
 
 	// size of bitmap?
-	int size;
+	// int size;
 	// size = (sblock->nblocks + sblock->ninodes/IPB + sblock->nblocks/BPB + 4) / 8;
 
 
 
 	exit(1);
 }
-
